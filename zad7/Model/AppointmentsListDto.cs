@@ -1,6 +1,6 @@
 ﻿namespace zad7.Model;
 
-public class ApointmentsListDto
+public class AppointmentsListDto
 {
     public int IdAppointment { get; set; }
     public DateTime AppointmentDate { get; set; }

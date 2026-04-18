@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using zad7.Model;
+using zad7.Services;
 
 namespace zad7.Controllers
 
@@ -10,35 +11,57 @@ namespace zad7.Controllers
     [ApiController]
     public class AppointmentsController : ControllerBase
     {
-        private string connectionString;
-        public AppointmentsController(IConfiguration configuration)
+        private readonly IAppointmentService _service;
+
+        public AppointmentsController(IConfiguration configuration, IAppointmentService service)
         {
-            connectionString = configuration.GetConnectionString("DefaultConnection");
+            _service = service;
         }
 
         [HttpGet]
-        public async Task<IActionResult> getAll()
+        public async Task<IActionResult> getAll(
+            [FromQuery] string? status,
+            [FromQuery] string? patientLastName)
         {
-            List<AppointmentDetailsDto> list = new List<AppointmentDetailsDto>();
-            using var connection = new SqlConnection(connectionString); 
-            await connection.OpenAsync();     
-            await using SqlCommand command = new SqlCommand("SELECT * FROM Appointments", connection);
-            await using SqlDataReader reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                list.Add(new AppointmentDetailsDto()
-                {
-                    IdPatient =  (int)reader["IdPatient"],
-                });
-            }
+            List<AppointmentsListDto> list = await _service.getAll(status, patientLastName);
             return Ok(list);
         }
 
-       /* [HttpGet("{id}")]
-        public IActionResult getById([FromRoute] int id)
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> getById([FromRoute] int id)
         {
-            
-        }*/
-        
+            AppointmentDetailsDto appointmentDetailsDto;
+            try
+            {
+                appointmentDetailsDto = await _service.getById(id);
+            }
+            catch (NotFoundExeption e)
+            {
+                return NotFound(e.Message);
+            }
+
+            return Ok(appointmentDetailsDto);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> add([FromBody] CreateAppointmentRequestDto createAppointmentRequestDto)
+        {
+            int id;
+            try
+            {
+                id = await _service.add(createAppointmentRequestDto);
+            }
+            catch (BadRequestExeption e)
+            {
+                return BadRequest(e.Message);
+            }
+            catch (ConflictExeption e)
+            {
+                return Conflict(e.Message);
+            }
+            Console.Write(id);
+            return CreatedAtAction(nameof(getById), new{id}, createAppointmentRequestDto);
+
+        }
     }
 }
