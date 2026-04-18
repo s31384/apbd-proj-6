@@ -63,5 +63,49 @@ namespace zad7.Controllers
             return CreatedAtAction(nameof(getById), new{id}, createAppointmentRequestDto);
 
         }
+
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> update([FromRoute] int id,
+            [FromBody] UpdateAppointmentRequestDto updateAppointmentRequestDto)
+        {
+            int result;
+            try
+            {
+                result = await _service.update(updateAppointmentRequestDto, id);
+                return Ok(result + " affected");
+            }
+            catch (NotFoundExeption e)
+            {
+                return NotFound(e.Message);
+            }
+            catch (ConflictExeption e)
+            {
+                return Conflict(e.Message);
+            }
+        }
+
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> delete([FromRoute] int id)
+        {
+            int result;
+            try
+            {
+                await _service.delete(id);
+            }
+            catch (NotFoundExeption e)
+            {
+                return NotFound(e.Message);
+            }
+            catch (ConflictExeption e)
+            {
+                return Conflict(e.Message);
+            }
+
+            return NoContent();
+        }
+
+
+
+
     }
 }

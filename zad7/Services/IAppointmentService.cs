@@ -8,6 +8,7 @@ public interface IAppointmentService
     public Task<AppointmentDetailsDto> getById(int id);
     public Task<List<AppointmentsListDto>> getAll(string? status, string? patientLastName);
     public Task<int> add(CreateAppointmentRequestDto createAppointmentRequestDto);
-
+    public Task<int> update(UpdateAppointmentRequestDto updateAppointmentRequestDto, int IdAppointment);
+    public Task<int> delete(int IdAppointment); 
 
 }

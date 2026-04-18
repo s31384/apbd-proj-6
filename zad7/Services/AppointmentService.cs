@@ -114,7 +114,7 @@ public class AppointmentService : IAppointmentService
             throw new BadRequestExeption("reason is too long");
         }
         await reader.CloseAsync();
-        SqlCommand insert = new SqlCommand("insert into Appointments(IdPatient,IdDoctor,AppointmentDate,Status,Reason,CreatedAt) values(@IdPatient,@IdDoctor,@AppointmentDate,@Status,@Reason,@CreatedAt);\nSELECT SCOPE_IDENTITY();", connection);
+        await using SqlCommand insert = new SqlCommand("insert into Appointments(IdPatient,IdDoctor,AppointmentDate,Status,Reason,CreatedAt) values(@IdPatient,@IdDoctor,@AppointmentDate,@Status,@Reason,@CreatedAt);\nSELECT SCOPE_IDENTITY();", connection);
         insert.Parameters.AddWithValue("@IdPatient", createAppointmentRequestDto.IdPatient);
         insert.Parameters.AddWithValue("@IdDoctor", createAppointmentRequestDto.IdDoctor);
         insert.Parameters.AddWithValue("@AppointmentDate",createAppointmentRequestDto.AppointmentDate);
@@ -123,6 +123,110 @@ public class AppointmentService : IAppointmentService
         insert.Parameters.AddWithValue("@CreatedAt", DateTime.Now);
         object? result = await insert.ExecuteScalarAsync();
         return Convert.ToInt32(result);            
+    }
+
+    public async Task<int> update(UpdateAppointmentRequestDto updateAppointmentRequestDto, int IdAppointment)
+    {
+        List<string> statuses = new List<string>()
+        {
+            "Scheduled", "Completed", "Cancelled"
+        };
+        if (!statuses.Contains(updateAppointmentRequestDto.Status))
+        {
+            throw new BadRequestExeption("wrong status");
+        }
+
+        using SqlConnection connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using SqlCommand command = new SqlCommand("select * from appointments where @IdAppointment = IdAppointment " +
+                                                        "SELECT * FROM Doctors WHERE @IdDoctor = IdDoctor;" +
+                                                        "SELECT * FROM Patients WHERE @IdPatient = IdPatient;" +
+                                                        "SELECT * FROM Appointments WHERE @IdDoctor = IdDoctor AND @AppointmentDate = AppointmentDate;", connection);
+        command.Parameters.AddWithValue("@IdAppointment", IdAppointment);
+        command.Parameters.AddWithValue("@IdDoctor", updateAppointmentRequestDto.IdDoctor);
+        command.Parameters.AddWithValue("@IdPatient", updateAppointmentRequestDto.IdPatient);
+        command.Parameters.AddWithValue("@AppointmentDate", updateAppointmentRequestDto.AppointmentDate);
+        await using SqlDataReader reader = await command.ExecuteReaderAsync();
+        if (!reader.HasRows)
+        {
+            throw new NotFoundExeption("no appointment found");
+        }
+        await reader.ReadAsync();
+        if ((string)reader["Status"] == "Completed")
+        {
+            throw new ConflictExeption("this appointment already complited");
+        }
+        
+        
+        await reader.NextResultAsync();
+
+        if (!reader.HasRows)
+        {
+            throw new NotFoundExeption("no doctor found");
+        }
+        await reader.ReadAsync();
+        if (!(bool)reader["IsActive"])
+        {
+            throw new BadRequestExeption("doctor is not active");
+        }
+        await reader.NextResultAsync();
+        if (!reader.HasRows)
+        {
+            throw new BadRequestExeption("no patient found");
+        }
+        await reader.ReadAsync();
+        if (!(bool)reader["IsActive"])
+        {
+            throw new BadRequestExeption("patient is not active");
+        }
+
+        await reader.NextResultAsync();
+        if (reader.HasRows)
+        {
+            throw new ConflictExeption("this doctor already have appointment on this time");
+        }
+        
+        await reader.CloseAsync();
+        if (updateAppointmentRequestDto.AppointmentDate < DateTime.Now)
+        {
+            throw new BadRequestExeption("wrong time");
+        }
+
+        SqlCommand updateCommand = new SqlCommand("update appointments \nset IdPatient = @IdPatient, IdDoctor = @IdDoctor, AppointmentDate = @AppointmentDate, Status = @Status, Reason = @Reason, InternalNotes = @InternalNotes\nwhere idappointment = @IdAppointment", connection);
+        updateCommand.Parameters.AddWithValue("@IdPatient", updateAppointmentRequestDto.IdPatient);
+        updateCommand.Parameters.AddWithValue("@IdDoctor", updateAppointmentRequestDto.IdDoctor);
+        updateCommand.Parameters.AddWithValue("@AppointmentDate", updateAppointmentRequestDto.AppointmentDate);
+        updateCommand.Parameters.AddWithValue("@Status", updateAppointmentRequestDto.Status);
+        updateCommand.Parameters.AddWithValue("@Reason", updateAppointmentRequestDto.Reason);
+        updateCommand.Parameters.AddWithValue("@InternalNotes", updateAppointmentRequestDto.InternalNotes);
+        updateCommand.Parameters.AddWithValue("@IdAppointment", IdAppointment);
+        int rows = await updateCommand.ExecuteNonQueryAsync();
+        return rows;
+    }
+
+    public async Task<int> delete(int IdAppointment)
+    {
+        using SqlConnection connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+        
+        await using SqlCommand command = new SqlCommand("Select * from appointments where IdAppointment = @IdAppointment", connection);
+        command.Parameters.AddWithValue("@IdAppointment",IdAppointment);
+
+        await using SqlDataReader reader = await command.ExecuteReaderAsync();
+        if (!reader.HasRows)
+        {
+            throw new NotFoundExeption("no appointment found"); 
+        }
+        await reader.ReadAsync();
+        if ((string)reader["Status"] == "Completed")
+        {
+            throw new ConflictExeption("already completed");
+        }
+        await reader.CloseAsync();
+        await using SqlCommand delete = new SqlCommand("delete from appointments where IdAppointment = @IdAppointment", connection);
+        delete.Parameters.AddWithValue("@IdAppointment",IdAppointment);
+        int result = await delete.ExecuteNonQueryAsync();
+        return result;
     }
     
 }
